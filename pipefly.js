@@ -21,43 +21,74 @@ export async function setupRepo(config) {
   Promise.resolve();
 }
 
-export function runSetup(config, { onOutput } = {}) {
-  return new Promise((resolve, reject) => {
-    try {
-      const processes = {};
-      const stepNames = Object.keys(config.setup);
-      const releasePath = getReleasePath(config);
+export async function runSetup(config, { onOutput } = {}) {
+  const stepNames = Object.keys(config.setup);
+  const releasePath = getReleasePath(config);
 
-      stepNames.forEach((stepName) => {
-        shelljs.cd(releasePath);
-        const step = config.setup[stepName];
-        const childProcess = shelljs.exec(step, {
-          async: true,
-          silent: true,
-        });
-        const process = {
-          process: childProcess,
-          output: [],
-          status: "open",
-          error: undefined,
-        };
-        processes[stepName] = process;
-        childProcess.stdout.on("data", (message) => {
-          process.output.push(message.toString());
-          onOutput && onOutput(message.toString());
-        });
-        childProcess.stderr.on("data", (message) => {
-          process.output.push(message.toString());
-          onOutput && onOutput(message.toString());
-        });
-        childProcess.on("exit", () => {
-          process.status = "success";
-          resolveIfAllClosed(processes, resolve);
-        });
-      });
-    } catch (error) {
-      reject(error);
+  await Promise.all(
+    stepNames.map((name) => {
+      const step = config.setup[name];
+      return executeShell(step, releasePath, { onOutput });
+    })
+  );
+}
+
+export async function runSteps(config, { onOutput } = {}) {
+  const stepNames = Object.keys(config.steps);
+  const releasePath = getReleasePath(config);
+
+  stepsLoop: for (const stepName of stepNames) {
+    let scripts = [];
+    const step = config.steps[stepName];
+
+    if (typeof step === "string") {
+      scripts = [step];
+    } else if ("scripts" in step) {
+      scripts = step.scripts;
+    } else {
+      throw new Error(`No scripts found for step "${stepName}"`);
     }
+
+    for (const script of scripts) {
+      const result = await executeShell(script, releasePath, { onOutput });
+
+      if (result.status === "error") {
+        break stepsLoop;
+      }
+    }
+  }
+}
+
+function executeShell(command, dir, { onOutput } = {}) {
+  return new Promise((resolve) => {
+    shelljs.cd(dir);
+    const childProcess = shelljs.exec(command, {
+      async: true,
+      silent: true,
+    });
+    const process = {
+      process: childProcess,
+      output: [],
+      status: "open",
+    };
+    childProcess.stdout.on("data", (message) => {
+      process.output.push(message.toString());
+      onOutput && onOutput(message.toString());
+    });
+    childProcess.stderr.on("data", (message) => {
+      process.output.push(message.toString());
+      process.status = "error";
+      onOutput && onOutput(message.toString());
+    });
+    childProcess.on("exit", (code) => {
+      if (code === 0) {
+        process.status = "success";
+        return resolve(process);
+      }
+
+      process.status = "error";
+      return resolve(process);
+    });
   });
 }
 

@@ -1,4 +1,4 @@
-import { runSetup, setupRepo } from "./pipefly.js";
+import { runSetup, runSteps, setupRepo } from "./pipefly.js";
 import pipeConfig from "./pipefly.config.js";
 
 async function run() {
@@ -10,7 +10,10 @@ async function run() {
     };
 
     await setupRepo(config);
-    const setupResult = await runSetup(config, {
+    await runSetup(config, {
+      onOutput: (message) => console.log(message),
+    });
+    await runSteps(config, {
       onOutput: (message) => console.log(message),
     });
   } catch (error) {

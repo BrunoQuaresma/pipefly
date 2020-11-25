@@ -1,12 +1,13 @@
 export default {
-  name: "mdapipe",
+  name: "pipefly",
+  path: "/Users/brunoquaresma/pipelines",
   setup: {
     installNodeJS: "./pipeline/installNodeJS.sh",
     installGit: "./pipeline/installGit.sh",
   },
   source: {
     type: "git",
-    url: "",
+    url: "git@github.com:BrunoQuaresma/pipefly.git",
   },
   steps: {
     test: "npm test",

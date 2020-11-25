@@ -1,13 +1,21 @@
 import shelljs from "shelljs";
+import fs from "fs";
 
 export async function setupRepo(config) {
-  const childProcess = shelljs.exec(
-    `git clone ${config.source.url} $(pwd)/releases/${config.name}/${config.id}`,
-    { silent: true }
-  );
+  const path = getReleasePath(config);
+
+  if (fs.existsSync(`${path}/`)) {
+    Promise.resolve();
+    return;
+  }
+
+  const childProcess = shelljs.exec(`git clone ${config.source.url} ${path}`, {
+    silent: true,
+  });
 
   if (childProcess.code !== 0) {
     Promise.reject(childProcess.toString());
+    return;
   }
 
   Promise.resolve();
@@ -18,8 +26,10 @@ export function runSetup(config, { onOutput } = {}) {
     try {
       const processes = {};
       const stepNames = Object.keys(config.setup);
+      const releasePath = getReleasePath(config);
 
       stepNames.forEach((stepName) => {
+        shelljs.cd(releasePath);
         const step = config.setup[stepName];
         const childProcess = shelljs.exec(step, {
           async: true,
@@ -49,6 +59,10 @@ export function runSetup(config, { onOutput } = {}) {
       reject(error);
     }
   });
+}
+
+function getReleasePath(config) {
+  return `${config.path}/${config.name}/${config.id}`;
 }
 
 function resolveIfAllClosed(processes, resolve) {
